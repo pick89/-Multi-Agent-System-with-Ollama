@@ -5,14 +5,14 @@ A production-ready multi-agent system that leverages Ollama's local LLMs with a 
 
 ## Models 
 
-# ===== TIER 1: ESSENTIAL =====
+### ===== TIER 1: ESSENTIAL =====
 ollama pull gemma3:1b
 ollama pull gemma3:4b
 ollama pull qwen2.5-coder:3b
 ollama pull qwen2.5-coder:7b
 ollama pull phi4:14b
 
-# ===== TIER 2: EXTENDED =====
+### ===== TIER 2: EXTENDED =====
 ollama pull llama3.2-vision:11b
 ollama pull minicpm-v:8b
 ollama pull aya:8b
@@ -20,13 +20,13 @@ ollama pull nous-hermes2:10.7b
 ollama pull mistral-nemo:12b
 ollama pull qwen2.5:14b
 
-# ===== TIER 3: MAXIMUM QUALITY =====
+### ===== TIER 3: MAXIMUM QUALITY =====
 ollama pull gemma3:12b
 ollama pull qwen2.5:32b
 ollama pull deepseek-coder-v2:16b
 ollama pull command-r:35b
 
-# Agent Architecture with New Stack
+## Agent Architecture with New Stack
 
 INPUT → gemma3:1b (Route) → Specialist:
                             ├── Vision/Finance: gemma3:4b
