@@ -27,7 +27,7 @@ ollama pull deepseek-coder-v2:16b
 ollama pull command-r:35b
 
 ## Agent Architecture with New Stack
-
+```markdown 
 INPUT → gemma3:1b (Route) → Specialist:
                             ├── Vision/Finance: gemma3:4b
                             ├── Code (fast): qwen2.5-coder:3b  
@@ -35,7 +35,7 @@ INPUT → gemma3:1b (Route) → Specialist:
                             ├── Vision (heavy): qwen3-vl
                             └── Agent/Tool: qwen3
 
-```text 
+
 ## 🏗️ Architecture
 
 ┌─────────────────────────────────────────────────────────┐
