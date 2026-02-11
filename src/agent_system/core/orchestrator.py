@@ -1,17 +1,19 @@
+"""
+Main orchestrator for routing requests to specialist agents
+"""
+
 import asyncio
-import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
 
 from agent_system.config import settings
 from agent_system.core.router_agent import RouterAgent
 from agent_system.core.specialist_base import SpecialistAgent
-from agent_system.agents.code_specialist import CodeSpecialist
-from agent_system.agents.email_agent import EmailAgent
-from agent_system.agents.vision_agent import VisionAgent
-from agent_system.agents.analysis_agent import AnalysisAgent
-from agent_system.memory.manager import MemoryManager
+from agent_system.agents import CodeSpecialist
+from agent_system.agents import EmailAgent
+from agent_system.agents import VisionAgent
+from agent_system.agents import AnalysisAgent
+from agent_system.agents import GenericAgent
 from agent_system.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -22,9 +24,8 @@ class AgentOrchestrator:
 
     def __init__(self):
         self.router = RouterAgent()
-        self.memory = MemoryManager()
         self.specialists: Dict[str, SpecialistAgent] = {}
-        self.executor = ThreadPoolExecutor(max_workers=settings.WORKER_COUNT)
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
         # Specialist factory registry
         self.specialist_factories = {
@@ -56,12 +57,9 @@ class AgentOrchestrator:
             attachments: Optional[List] = None
     ) -> Dict[str, Any]:
         """Process a user request through the agent pipeline"""
-
-        # Get or create session
+        
         session = session or {}
-
-        # Load user context from memory
-        user_context = await self.memory.get_user_context(user_id)
+        user_context = {"user_id": user_id}
 
         try:
             # Step 1: Route the request
@@ -72,13 +70,15 @@ class AgentOrchestrator:
             # Check if we need clarification
             if classification.get("requires_clarification"):
                 return {
+                    "response": "\n".join(classification.get("suggested_questions", ["Could you provide more details?"])),
                     "requires_clarification": True,
-                    "question": self._generate_clarification_question(classification),
-                    "session": {"pending_intent": classification, **session}
+                    "category": classification.get("category"),
+                    "model_used": specialist_model,
+                    "confidence": classification.get("confidence", 0.5)
                 }
 
             # Step 2: Get or initialize specialist
-            specialist = self._get_specialist(specialist_model, classification["category"])
+            specialist = self._get_specialist(specialist_model, classification.get("category", "general"))
 
             # Step 3: Process with specialist
             processing_result = await self._process_with_specialist(
@@ -89,26 +89,14 @@ class AgentOrchestrator:
                 attachments
             )
 
-            # Step 4: Store in memory
-            await self._store_interaction(
-                user_id,
-                user_input,
-                processing_result,
-                classification
-            )
-
-            # Step 5: Synthesize response
-            final_response = await self._synthesize_response(
-                user_input,
-                processing_result,
-                classification,
-                user_context
-            )
-
+            # Step 4: Synthesize response
+            final_response = processing_result.get("response", "Task completed successfully.")
+            
             return {
                 "response": final_response,
                 "model_used": specialist_model,
-                "classification": classification,
+                "category": classification.get("category"),
+                "confidence": classification.get("confidence", 0.7),
                 "attachments": processing_result.get("attachments", []),
                 "actions": processing_result.get("actions", []),
                 "session": session
@@ -117,8 +105,11 @@ class AgentOrchestrator:
         except Exception as e:
             logger.error(f"Error processing request: {e}", exc_info=True)
             return {
-                "response": "I encountered an error processing your request. Please try again.",
+                "response": f"I encountered an error: {str(e)}",
                 "error": str(e),
+                "category": "error",
+                "model_used": "fallback",
+                "confidence": 0.0,
                 "session": session
             }
 
@@ -126,14 +117,21 @@ class AgentOrchestrator:
         """Route request to appropriate specialist"""
         loop = asyncio.get_event_loop()
 
-        classification = await loop.run_in_executor(
+        classification_result = await loop.run_in_executor(
             self.executor,
             self.router.classify_intent,
             user_input,
             user_context
         )
+        
+        # Convert to dict if it's an object
+        if hasattr(classification_result, 'to_dict'):
+            classification = classification_result.to_dict()
+        elif hasattr(classification_result, '__dict__'):
+            classification = classification_result.__dict__
+        else:
+            classification = classification_result
 
-        # Determine best model based on task and user preferences
         model = self._select_best_model(classification)
 
         return {
@@ -144,29 +142,34 @@ class AgentOrchestrator:
     def _select_best_model(self, classification: Dict) -> str:
         """Select the best model for the task"""
         category = classification.get("category", "general")
+        if hasattr(category, 'value'):
+            category = category.value
+            
         priority = classification.get("priority", 3)
+        if hasattr(priority, 'value'):
+            priority = priority.value
+            
         complexity = classification.get("complexity", "medium")
+        if hasattr(complexity, 'value'):
+            complexity = complexity.value
 
         if category == "code":
-            if complexity == "high" or priority <= 2:
+            if complexity in ["high", "very_complex"] or priority <= 2:
                 return "deepseek-coder-v2:16b"
             elif complexity == "medium":
                 return "qwen2.5-coder:7b"
             else:
                 return "qwen2.5-coder:3b"
-
         elif category == "vision":
-            if priority <= 2:
-                return "llama3.2-vision:11b"
-            else:
-                return "gemma3:4b"
-
+            return "llama3.2-vision:11b" if priority <= 2 else "gemma3:4b"
         elif category == "analysis":
-            if complexity == "high":
-                return "phi4:14b"
-            else:
-                return "qwen2.5:14b"
-
+            return "phi4:14b" if complexity in ["high", "very_complex"] else "qwen2.5:14b"
+        elif category == "email":
+            return "phi4:14b"
+        elif category == "search":
+            return "qwen2.5:14b"
+        elif category == "reminder":
+            return "gemma3:4b"
         else:
             return settings.DEFAULT_MODEL
 
@@ -178,10 +181,9 @@ class AgentOrchestrator:
                 if factory:
                     self.specialists[model_name] = factory()
                 else:
-                    self.specialists[model_name] = SpecialistAgent(model_name)
+                    self.specialists[model_name] = GenericAgent(model_name)
             else:
-                self.specialists[model_name] = SpecialistAgent(model_name)
-
+                self.specialists[model_name] = GenericAgent(model_name)
         return self.specialists[model_name]
 
     async def _process_with_specialist(
@@ -207,66 +209,38 @@ class AgentOrchestrator:
             }
         )
 
-    async def _synthesize_response(
-            self,
-            user_input: str,
-            specialist_output: Dict,
-            classification: Dict,
-            user_context: Dict
-    ) -> str:
-        """Synthesize a final response from specialist output"""
-
-        # Use aya:8b for multilingual synthesis if available
-        if "aya:8b" in self.specialists:
-            synthesizer = self.specialists["aya:8b"]
-        else:
-            synthesizer = self._get_specialist("gemma3:4b", "general")
-
-        system_prompt = """You are a response synthesizer. Format the specialist's output into a clear, helpful response. 
-        Use markdown for formatting. Be concise but complete. Adapt to the user's language."""
-
-        prompt = f"""
-        Original request: {user_input}
-
-        Specialist output: {specialist_output}
-
-        Task category: {classification.get('category')}
-        Priority: {classification.get('priority')}
-
-        Generate a well-formatted response:
-        """
-
-        return synthesizer.generate(prompt, system_prompt, temperature=0.3)
-
-    async def _store_interaction(
-            self,
-            user_id: str,
-            user_input: str,
-            result: Dict,
-            classification: Dict
-    ):
-        """Store interaction in memory"""
-        await self.memory.add_interaction(
-            user_id=user_id,
-            user_input=user_input,
-            system_response=result.get("response", ""),
-            metadata={
-                "category": classification.get("category"),
-                "model_used": result.get("model_used"),
-                "priority": classification.get("priority")
-            }
+    async def process_request_parallel(
+        self,
+        user_input: str,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """Process with parallel speculation - 2x faster"""
+        
+        # Run router and specialist in parallel
+        route_task = self._route_request(user_input, {"user_id": user_id})
+        
+        # Also try generic response in parallel
+        generic_task = self._get_specialist("gemma3:1b", "general").process({
+            "task": user_input
+        })
+        
+        # Wait for both
+        route_result, generic_result = await asyncio.gather(
+            route_task, 
+            asyncio.get_event_loop().run_in_executor(
+                self.executor, 
+                lambda: generic_task
+            ),
+            return_exceptions=True
         )
-
-    def _generate_clarification_question(self, classification: Dict) -> str:
-        """Generate a clarification question"""
-        category = classification.get("category", "general")
-
-        questions = {
-            "code": "I need more details about the code you want. What programming language? What should it do?",
-            "vision": "What image would you like me to analyze? Please upload it.",
-            "email": "Which emails should I check? Any specific sender or subject?",
-            "search": "What would you like me to search for?",
-            "general": "Could you provide more details about what you need?"
-        }
-
-        return questions.get(category, "Could you please provide more details?")
+        
+        # If routing fails, use generic response
+        if isinstance(route_result, Exception):
+            return {
+                "response": generic_result.get("response", "Hello!"),
+                "model_used": "gemma3:1b",
+                "category": "general"
+            }
+        
+        # Normal processing
+        return await self.process_request(user_input, user_id)

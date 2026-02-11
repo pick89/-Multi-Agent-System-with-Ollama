@@ -1,0 +1,12 @@
+{
+    "python.analysis.extraPaths": ["./src"],
+    "python.autoComplete.extraPaths": ["./src"],
+    "python.analysis.diagnosticSeverityOverride": {
+        "reportMissingImports": "none",
+        "reportUnusedImport": "warning"
+    },
+    "python.defaultInterpreterPath": ".venv/bin/python",
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+    }
+}

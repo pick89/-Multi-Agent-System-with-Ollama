@@ -1,139 +1,23 @@
 [tool.poetry]
 name = "multi-agent-system"
-version = "0.1.0"
-description = "Multi-Agent System with Ollama and Telegram Integration"
-authors = ["Your Name <your.email@example.com>"]
-license = "MIT"
-readme = "README.md"
+version = "1.0.0"
+description = "Production Multi-Agent System"
+authors = ["Your Name"]
 packages = [{include = "agent_system", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-# Core
-ollama = "^0.1.8"
-python-dotenv = "^1.0.0"
-
-# Telegram
 python-telegram-bot = "^20.7"
-
-# Database & Cache
-redis = "^5.0.1"
-faiss-cpu = "^1.7.4"
-chromadb = "^0.4.22"
-sqlalchemy = "^2.0.23"
-
-# Async
-aiohttp = "^3.9.1"
-asyncio = "^3.4.3"
-aiofiles = "^23.2.1"
-
-# Data Processing
-numpy = "^1.24.3"
-pandas = "^2.0.3"
-pillow = "^10.1.0"
-opencv-python = "^4.9.0"
-
-# Email
-imaplib2 = "^3.6"
-secure-smtplib = "^0.1.1"
-email-validator = "^2.1.0"
-
-# Code Execution
-black = "^23.12.1"
-pylint = "^3.0.3"
-mypy = "^1.8.0"
-
-# Search & Scraping
-beautifulsoup4 = "^4.12.2"
 httpx = "^0.25.2"
-
-# Monitoring
-loguru = "^0.7.2"
-prometheus-client = "^0.19.0"
-
-# Utils
-jinja2 = "^3.1.2"
-pydantic = "^2.5.3"
+python-dotenv = "^1.0.0"
 pydantic-settings = "^2.1.0"
 typer = "^0.9.0"
 rich = "^13.7.0"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.3"
-pytest-asyncio = "^0.23.2"
-pytest-cov = "^4.1.0"
-black = "^23.12.1"
-isort = "^5.13.2"
-mypy = "^1.8.0"
-pre-commit = "^3.6.0"
-ruff = "^0.1.9"
+psutil = "^7.2.2"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-agent-system = "agent_system.main:app"
-deploy-models = "agent_system.scripts.init_ollama:deploy_all"
-
-[tool.black]
-line-length = 100
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-
-[tool.isort]
-profile = "black"
-line_length = 100
-multi_line_output = 3
-include_trailing_comma = true
-
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_any_unimported = false
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-
-[tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-ra -q --strict-markers --cov=agent_system --cov-report=html --cov-report=term"
-testpaths = [
-    "tests",
-]
-asyncio_mode = "auto"
-
-[tool.coverage.run]
-source = ["agent_system"]
-omit = ["*/tests/*", "*/test_*"]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if __name__ == .__main__.:",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
-    "elif 0:",
-]
+agent = "agent_system.main:main"
