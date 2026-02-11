@@ -247,7 +247,6 @@ MIT License - see LICENSE file
 This system runs LLMs locally. Ensure you have sufficient hardware resources. 
 Email features require valid IMAP/SMTP credentials.
 
-```text
 
 ## 🚀 Installation & Setup Commands
 
